@@ -129,7 +129,7 @@ fn main() -> ! {
     let mut heart2 = 0;
     let mut pulse: u32; // pulse, will be set immediately, no need to set here.
     let mut feeling_cold: bool = false;
-    pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 20;
+    pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 23;
 
     loop {
         for time in 0u16..65500 {
@@ -171,15 +171,6 @@ fn main() -> ! {
 
             // Change of <3
             if time % 100 == 0 {
-                let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
-                // Our DIY conversion for ADC counts into temperature without Vcc, since e.g. 883, 8+8+3 = 19. This is a rough estimate from Pico, best available! :)
-                // Tested with modified version of: https://github.com/rp-rs/rp-hal/blob/main/rp2040-hal-examples/src/bin/adc.rs
-                // transform e.g. 883 = 19C (let's call it Celsius)
-                let temperature: u16 = temperature_adc_counts / 100 + (temperature_adc_counts %100 ) / 10 + temperature_adc_counts % 10;
-                match temperature {
-                    0 .. MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER => feeling_cold = true,
-                    MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER..=u16::MAX => feeling_cold = false,
-                }                
                 heart1 = 0xffff;
                 heart2 = 0x1000;
             }
