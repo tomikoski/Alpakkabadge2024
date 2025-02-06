@@ -1,3 +1,7 @@
+# Alpakkabadge2025 (2024 edition 2)
+
+The sequel, patched for Disobey 2025. Alpakka ("Alpaca") has now two impressions, warm and cold. If feeling cold, one eye will shut and heart will pulse slower in blue. More or less these modifications were done just to learn how to use Rust for embedded devices.
+
 # Alpakkabadge2024
 
 Alpakkabadge2024 - Created originally for Disobey 2024
