@@ -24,6 +24,19 @@ fn convert_to_celsius(raw_temp: u16) -> u16 {
     (rounded_temp_x10 as u16) / 10
 }
 
+// Since here it states: 
+//
+// https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
+//
+// The on board temperature sensor is very sensitive to errors in the reference voltage. If the ADC returns a value of
+// 891 this would correspond to a temperature of 20.1°C. However if the reference voltage is 1% lower than 3.3V then
+// the same reading of 891 would correspond to 24.3°C. You would see a change in temperature of over 4°C for a small
+// 1% change in reference voltage. Therefore if you want to improve the accuracy of the internal temperature sensor it
+// is worth considering adding an external reference voltage.
+//
+// ...Let's adjust temperature lower to adjust almost yearly Finnish weather :)
+pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 5;
+
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
@@ -129,7 +142,6 @@ fn main() -> ! {
     let mut heart2 = 0;
     let mut pulse: u32; // pulse, will be set immediately, no need to set here.
     let mut feeling_cold: bool = false;
-    pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 23;
 
     loop {
         for time in 0u16..65500 {
