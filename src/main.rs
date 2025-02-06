@@ -2,8 +2,8 @@
 #![no_main]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
-use embedded_hal::watchdog::WatchdogEnable;
-use palette::angle::FromAngle;
+//use embedded_hal::watchdog::WatchdogEnable;
+//use palette::angle::FromAngle;
 use panic_halt as _;
 //use panic_semihosting as _;
 
@@ -11,11 +11,21 @@ mod bsp;
 use bsp::prelude::*;
 
 // Traits
-use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin}; // for pin.toggle()
+use embedded_hal::digital::v2::OutputPin; // for pin.toggle()
 use embedded_hal::PwmPin;
 use hal::clocks::Clock; // for system_clock.freq()
 
-use palette::{FromColor, Hsl, IntoColor, Lch, Srgb, Hsv};
+use palette::{IntoColor, Srgb, Hsv};
+use embedded_hal::adc::OneShot;
+use rp2040_hal::{adc::Adc, pac};
+
+fn convert_to_celsius(raw_temp: u16) -> u16 {
+    // According to chapter 4.9.5. Temperature Sensor in RP2040 datasheet
+    let temp = 27.0 - (raw_temp as f32 * 3.3 / 4096.0 - 0.706) / 0.001721;
+    let sign = if temp < 0.0 { -1.0 } else { 1.0 };
+    let rounded_temp_x10: i16 = ((temp * 10.0) + 0.5 * sign) as i16;
+    (rounded_temp_x10 as u16) / 10
+}
 
 #[entry]
 fn main() -> ! {
@@ -114,15 +124,20 @@ fn main() -> ! {
     let mut led: bsp::Led = pins.led.into_mode();
     led.set_low().unwrap();
 
+    // enable ADC with TempSense: https://docs.rs/rp2040-hal/0.7.0/rp2040_hal/adc/index.html
+    let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
+    let mut temperature_sensor = adc.enable_temp_sensor();
+
     let mut heart1 = 0;
     let mut heart2 = 0;
+
     loop {
         for time in 0u16..65500 {
             let eyes: Srgb = Hsv::new(f32::from(time)/65500.0*360.0*40.0, 1.0, 1.0).into_color();
             let eyes_components = eyes.into_components();
             let eye_r = (eyes_components.0 * 20000.0) as u16;
             let eye_g = (eyes_components.1 * 20000.0) as u16;
-            let eye_b = (eyes_components.2 * 65535.0) as u16;
+            let eye_b = (eyes_components.2 * 65535.0) as u16;            
             plr.set_duty(eye_r);
             plg.set_duty(eye_g);
             plb.set_duty(eye_b);
@@ -131,15 +146,35 @@ fn main() -> ! {
             prb.set_duty(eye_b);
 
             if time.wrapping_add(20) % 100 == 0 {
+                let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
+                let temperature = convert_to_celsius(temperature_adc_counts);
+                heart1 = match temperature {
+                    0 .. 15 =>  0x1111,
+                    15 .. 35 => 0x5555,
+                    35 ..=u16::MAX => 0xffff
+                };
+
+                //override with normal activity
                 heart1 = 0xffff;
             }
+
             if time % 100 == 0 {
+                let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
+                let temperature = convert_to_celsius(temperature_adc_counts);
+                heart1 = match temperature {
+                    0 .. 15 =>  0x1111,
+                    15 .. 35 => 0x5555,
+                    35 ..=u16::MAX => 0xffff
+                };
+
+                //override with normal activity
                 heart1 = 0xffff;
                 heart2 = 0x1000;
             }
-
-            phr.set_duty(heart1);
-            phb.set_duty(heart2);
+                    
+            phr.set_duty(heart1); //heart red
+            //phg.set_duty(heart1); //heart green
+            phb.set_duty(heart2); //heart blue
 
             heart1 = match heart1.checked_sub(1000) {
                 Some(n) => n,
@@ -151,7 +186,7 @@ fn main() -> ! {
                 None => 0,
             };
 
-            delay.delay_ms(10);
+            delay.delay_ms(100);
         }
     }
 }
