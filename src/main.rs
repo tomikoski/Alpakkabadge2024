@@ -16,6 +16,14 @@ use palette::{IntoColor, Srgb, Hsv};
 use embedded_hal::adc::OneShot;
 use rp2040_hal::{adc::Adc, pac};
 
+fn convert_to_celsius(raw_temp: u16) -> u16 {
+    // According to chapter 4.9.5. Temperature Sensor in RP2040 datasheet
+    let temp = 27.0 - (raw_temp as f32 * 3.3 / 4096.0 - 0.706) / 0.001721;
+    let sign = if temp < 0.0 { -1.0 } else { 1.0 };
+    let rounded_temp_x10: i16 = ((temp * 10.0) + 0.5 * sign) as i16;
+    (rounded_temp_x10 as u16) / 10
+}
+
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
@@ -119,6 +127,7 @@ fn main() -> ! {
 
     let mut heart1 = 0;
     let mut heart2 = 0;
+    let mut pulse: u32; // pulse, will be set immediately, no need to set here.
     let mut feeling_cold: bool = false;
     pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 20;
 
@@ -132,12 +141,32 @@ fn main() -> ! {
             plr.set_duty(eye_r);
             plg.set_duty(eye_g);
             plb.set_duty(eye_b);
-            prr.set_duty(eye_r);
-            prg.set_duty(eye_g);
-            prb.set_duty(eye_b);
+            
+            // close right eye if cold, looks funny and saves power (if CR2032 used)
+            match feeling_cold {
+                true => {
+                    prr.set_duty(0);
+                    prg.set_duty(0);
+                    prb.set_duty(0);
+                },
+                false => {
+                    prr.set_duty(eye_r);
+                    prg.set_duty(eye_g);
+                    prb.set_duty(eye_b);
+                }
+            }
 
             if time.wrapping_add(20) % 100 == 0 {
                 heart1 = 0xffff;
+            }
+
+            if time % 1000 == 0 {
+                let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
+                let temperature = convert_to_celsius(temperature_adc_counts);
+                match temperature {
+                    0 .. MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER => feeling_cold = true,
+                    MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER..=u16::MAX => feeling_cold = false,
+                }
             }
 
             // Change of <3
@@ -162,12 +191,14 @@ fn main() -> ! {
                             phr.set_duty(heart2); //heart red
                             //phg.set_duty(0); //heart green
                             phb.set_duty(heart1); //heart blue
+                            pulse = 20; // slower pulse
                 }
                 false => {
                             // Red <3
                             phr.set_duty(heart1); //heart red
                             //phg.set_duty(heart1); //heart green
                             phb.set_duty(heart2); //heart blue
+                            pulse = 10; // normal pulse
                 }
             }
 
@@ -181,7 +212,7 @@ fn main() -> ! {
                 None => 0,
             };
 
-            delay.delay_ms(100);
+            delay.delay_ms(pulse);
         }
     }
 }
