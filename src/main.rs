@@ -16,15 +16,6 @@ use palette::{IntoColor, Srgb, Hsv};
 use embedded_hal::adc::OneShot;
 use rp2040_hal::{adc::Adc, pac};
 
-// Fahrenheit -> Celsius
-fn convert_to_celsius(raw_temp: u16) -> u16 {
-    // According to chapter 4.9.5. Temperature Sensor in RP2040 datasheet
-    let temp = 27.0 - (raw_temp as f32 * 3.3 / 4096.0 - 0.706) / 0.001721;
-    let sign = if temp < 0.0 { -1.0 } else { 1.0 };
-    let rounded_temp_x10: i16 = ((temp * 10.0) + 0.5 * sign) as i16;
-    (rounded_temp_x10 as u16) / 10
-}
-
 #[entry]
 fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
@@ -129,7 +120,7 @@ fn main() -> ! {
     let mut heart1 = 0;
     let mut heart2 = 0;
     let mut feeling_cold: bool = false;
-    pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 23;
+    pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 20;
 
     loop {
         for time in 0u16..65500 {
@@ -152,7 +143,10 @@ fn main() -> ! {
             // Change of <3
             if time % 100 == 0 {
                 let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
-                let temperature = convert_to_celsius(temperature_adc_counts);
+                // Our DIY conversion for ADC counts into temperature without Vcc, since e.g. 883, 8+8+3 = 19. This is a rough estimate from Pico, best available! :)
+                // Tested with modified version of: https://github.com/rp-rs/rp-hal/blob/main/rp2040-hal-examples/src/bin/adc.rs
+                // transform e.g. 883 = 19C (let's call it Celsius)
+                let temperature: u16 = temperature_adc_counts / 100 + (temperature_adc_counts %100 ) / 10 + temperature_adc_counts % 10;
                 match temperature {
                     0 .. MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER => feeling_cold = true,
                     MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER..=u16::MAX => feeling_cold = false,
