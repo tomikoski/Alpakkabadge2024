@@ -2,10 +2,7 @@
 #![no_main]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
-//use embedded_hal::watchdog::WatchdogEnable;
-//use palette::angle::FromAngle;
 use panic_halt as _;
-//use panic_semihosting as _;
 
 mod bsp;
 use bsp::prelude::*;
@@ -19,6 +16,7 @@ use palette::{IntoColor, Srgb, Hsv};
 use embedded_hal::adc::OneShot;
 use rp2040_hal::{adc::Adc, pac};
 
+// Fahrenheit -> Celsius
 fn convert_to_celsius(raw_temp: u16) -> u16 {
     // According to chapter 4.9.5. Temperature Sensor in RP2040 datasheet
     let temp = 27.0 - (raw_temp as f32 * 3.3 / 4096.0 - 0.706) / 0.001721;
@@ -130,6 +128,8 @@ fn main() -> ! {
 
     let mut heart1 = 0;
     let mut heart2 = 0;
+    let mut feeling_cold: bool = false;
+    pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 23;
 
     loop {
         for time in 0u16..65500 {
@@ -146,35 +146,36 @@ fn main() -> ! {
             prb.set_duty(eye_b);
 
             if time.wrapping_add(20) % 100 == 0 {
-                let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
-                let temperature = convert_to_celsius(temperature_adc_counts);
-                heart1 = match temperature {
-                    0 .. 15 =>  0x1111,
-                    15 .. 35 => 0x5555,
-                    35 ..=u16::MAX => 0xffff
-                };
-
-                //override with normal activity
                 heart1 = 0xffff;
             }
 
+            // Change of <3
             if time % 100 == 0 {
                 let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
                 let temperature = convert_to_celsius(temperature_adc_counts);
-                heart1 = match temperature {
-                    0 .. 15 =>  0x1111,
-                    15 .. 35 => 0x5555,
-                    35 ..=u16::MAX => 0xffff
-                };
-
-                //override with normal activity
+                match temperature {
+                    0 .. MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER => feeling_cold = true,
+                    MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER..=u16::MAX => feeling_cold = false,
+                }                
                 heart1 = 0xffff;
                 heart2 = 0x1000;
             }
-                    
-            phr.set_duty(heart1); //heart red
-            //phg.set_duty(heart1); //heart green
-            phb.set_duty(heart2); //heart blue
+
+            // Give either BLUE or RED <3
+            match feeling_cold {
+                true => {
+                            // Blue <3
+                            phr.set_duty(heart2); //heart red
+                            //phg.set_duty(0); //heart green
+                            phb.set_duty(heart1); //heart blue
+                }
+                false => {
+                            // Red <3
+                            phr.set_duty(heart1); //heart red
+                            //phg.set_duty(heart1); //heart green
+                            phb.set_duty(heart2); //heart blue
+                }
+            }
 
             heart1 = match heart1.checked_sub(1000) {
                 Some(n) => n,
