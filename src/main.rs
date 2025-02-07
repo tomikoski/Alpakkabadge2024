@@ -35,7 +35,7 @@ fn convert_to_celsius(raw_temp: u16) -> u16 {
 // is worth considering adding an external reference voltage.
 //
 // ...Let's adjust temperature lower to adjust almost yearly Finnish weather :)
-pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 5;
+pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 10;
 
 #[entry]
 fn main() -> ! {
