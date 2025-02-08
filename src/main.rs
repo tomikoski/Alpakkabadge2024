@@ -126,7 +126,7 @@ fn main() -> ! {
             let eye_r = (eyes_components.0 * 20000.0) as u16;
             let eye_g = (eyes_components.1 * 20000.0) as u16;
             let eye_b = (eyes_components.2 * 65535.0) as u16;
-            
+
             if terminator_toggle {
                 plr.set_duty(eye_r);
                 plg.set_duty(eye_g);
@@ -152,7 +152,7 @@ fn main() -> ! {
                 heart2 = 0x1000;
             }
 
-            if time % 500 == 0 {
+            if time % 1000 == 0 {
                 heart_mode += 1;
                 terminator_toggle = !terminator_toggle;
             }
@@ -161,21 +161,13 @@ fn main() -> ! {
                     // Red
                     phr.set_duty(heart1);
                     phg.set_duty(heart2);
-                    phb.set_duty(heart2);
             } else if heart_mode == 2 {
-                        // Green
+                    // Green
                     phr.set_duty(heart2);
                     phg.set_duty(heart1);
-                    phb.set_duty(heart2);
-            } else if heart_mode == 3 {
-                        // Blue
-                        phr.set_duty(heart2);
-                        phg.set_duty(heart2);
-                        phb.set_duty(heart1);
             } else {
                 heart_mode = 1;
             }
-
 
 
             heart1 = match heart1.checked_sub(1000) {
