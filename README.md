@@ -1,3 +1,6 @@
+# Alpakkabadge2025 (CR2023 edition)
+The sequel, patched for Disobey 2025. Alpakka ("Alpaca") has now three heart impressions; red, green and blue. This branch was made due to the fact that CR2023 batteries cannot provide stable power for ADC to work properly (check Main-branch for more details).
+
 # Alpakkabadge2024
 
 Alpakkabadge2024 - Created originally for Disobey 2024
