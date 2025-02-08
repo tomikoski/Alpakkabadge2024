@@ -117,6 +117,7 @@ fn main() -> ! {
     let mut heart1 = 0;
     let mut heart2 = 0;
     let mut heart_mode: u16 = 0;
+    let mut terminator_toggle: bool = false;
 
     loop {
         for time in 0u16..65500 {
@@ -125,12 +126,23 @@ fn main() -> ! {
             let eye_r = (eyes_components.0 * 20000.0) as u16;
             let eye_g = (eyes_components.1 * 20000.0) as u16;
             let eye_b = (eyes_components.2 * 65535.0) as u16;
-            plr.set_duty(eye_r);
-            plg.set_duty(eye_g);
-            plb.set_duty(eye_b);
-            prr.set_duty(eye_r);
-            prg.set_duty(eye_g);
-            prb.set_duty(eye_b);
+            
+            if terminator_toggle {
+                plr.set_duty(eye_r);
+                plg.set_duty(eye_g);
+                plb.set_duty(eye_b);
+                prr.set_duty(0);
+                prg.set_duty(0);
+                prb.set_duty(0);
+
+            } else {
+                plr.set_duty(0);
+                plg.set_duty(0);
+                plb.set_duty(0);
+                prr.set_duty(eye_r);
+                prg.set_duty(eye_g);
+                prb.set_duty(eye_b);
+            }
 
             if time.wrapping_add(20) % 100 == 0 {
                 heart1 = 0xffff;
@@ -142,6 +154,7 @@ fn main() -> ! {
 
             if time % 500 == 0 {
                 heart_mode += 1;
+                terminator_toggle = !terminator_toggle;
             }
 
             if heart_mode == 1 {
