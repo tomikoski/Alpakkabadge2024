@@ -2,40 +2,20 @@
 #![no_main]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 
+use embedded_hal::watchdog::WatchdogEnable;
+use palette::angle::FromAngle;
 use panic_halt as _;
+//use panic_semihosting as _;
 
 mod bsp;
 use bsp::prelude::*;
 
 // Traits
-use embedded_hal::digital::v2::OutputPin; // for pin.toggle()
+use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin}; // for pin.toggle()
 use embedded_hal::PwmPin;
 use hal::clocks::Clock; // for system_clock.freq()
 
-use palette::{IntoColor, Srgb, Hsv};
-use embedded_hal::adc::OneShot;
-use rp2040_hal::{adc::Adc, pac};
-
-fn convert_to_celsius(raw_temp: u16) -> u16 {
-    // According to chapter 4.9.5. Temperature Sensor in RP2040 datasheet
-    let temp = 27.0 - (raw_temp as f32 * 3.3 / 4096.0 - 0.706) / 0.001721;
-    let sign = if temp < 0.0 { -1.0 } else { 1.0 };
-    let rounded_temp_x10: i16 = ((temp * 10.0) + 0.5 * sign) as i16;
-    (rounded_temp_x10 as u16) / 10
-}
-
-// Since here it states: 
-//
-// https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
-//
-// The on board temperature sensor is very sensitive to errors in the reference voltage. If the ADC returns a value of
-// 891 this would correspond to a temperature of 20.1°C. However if the reference voltage is 1% lower than 3.3V then
-// the same reading of 891 would correspond to 24.3°C. You would see a change in temperature of over 4°C for a small
-// 1% change in reference voltage. Therefore if you want to improve the accuracy of the internal temperature sensor it
-// is worth considering adding an external reference voltage.
-//
-// ...Let's adjust temperature lower to adjust almost yearly Finnish weather :)
-pub const MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER: u16 = 5;
+use palette::{FromColor, Hsl, IntoColor, Lch, Srgb, Hsv};
 
 #[entry]
 fn main() -> ! {
@@ -134,14 +114,9 @@ fn main() -> ! {
     let mut led: bsp::Led = pins.led.into_mode();
     led.set_low().unwrap();
 
-    // enable ADC with TempSense: https://docs.rs/rp2040-hal/0.7.0/rp2040_hal/adc/index.html
-    let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
-    let mut temperature_sensor = adc.enable_temp_sensor();
-
     let mut heart1 = 0;
     let mut heart2 = 0;
-    let mut pulse: u32; // pulse, will be set immediately, no need to set here.
-    let mut feeling_cold: bool = false;
+    let mut heart_mode: u16 = 0;
 
     loop {
         for time in 0u16..65500 {
@@ -149,61 +124,46 @@ fn main() -> ! {
             let eyes_components = eyes.into_components();
             let eye_r = (eyes_components.0 * 20000.0) as u16;
             let eye_g = (eyes_components.1 * 20000.0) as u16;
-            let eye_b = (eyes_components.2 * 65535.0) as u16;            
+            let eye_b = (eyes_components.2 * 65535.0) as u16;
             plr.set_duty(eye_r);
             plg.set_duty(eye_g);
             plb.set_duty(eye_b);
-            
-            // close right eye if cold, looks funny and saves power (if CR2032 used)
-            match feeling_cold {
-                true => {
-                    prr.set_duty(0);
-                    prg.set_duty(0);
-                    prb.set_duty(0);
-                },
-                false => {
-                    prr.set_duty(eye_r);
-                    prg.set_duty(eye_g);
-                    prb.set_duty(eye_b);
-                }
-            }
+            prr.set_duty(eye_r);
+            prg.set_duty(eye_g);
+            prb.set_duty(eye_b);
 
             if time.wrapping_add(20) % 100 == 0 {
                 heart1 = 0xffff;
             }
-
-            if time % 1000 == 0 {
-                let temperature_adc_counts: u16 = adc.read(&mut temperature_sensor).unwrap();
-                let temperature = convert_to_celsius(temperature_adc_counts);
-                match temperature {
-                    0 .. MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER => feeling_cold = true,
-                    MY_ALPACCA_FEELS_COLD_WHEN_CELSIUS_HITS_UNDER..=u16::MAX => feeling_cold = false,
-                }
-            }
-
-            // Change of <3
             if time % 100 == 0 {
                 heart1 = 0xffff;
                 heart2 = 0x1000;
             }
 
-            // Give either BLUE or RED <3
-            match feeling_cold {
-                true => {
-                            // Blue <3
-                            phr.set_duty(heart2); //heart red
-                            //phg.set_duty(0); //heart green
-                            phb.set_duty(heart1); //heart blue
-                            pulse = 20; // slower pulse
-                }
-                false => {
-                            // Red <3
-                            phr.set_duty(heart1); //heart red
-                            //phg.set_duty(heart1); //heart green
-                            phb.set_duty(heart2); //heart blue
-                            pulse = 10; // normal pulse
-                }
+            if time % 500 == 0 {
+                heart_mode += 1;
             }
+
+            if heart_mode == 1 {
+                    // Red
+                    phr.set_duty(heart1);
+                    phg.set_duty(heart2);
+                    phb.set_duty(heart2);
+            } else if heart_mode == 2 {
+                        // Green
+                    phr.set_duty(heart2);
+                    phg.set_duty(heart1);
+                    phb.set_duty(heart2);
+            } else if heart_mode == 3 {
+                        // Blue
+                        phr.set_duty(heart2);
+                        phg.set_duty(heart2);
+                        phb.set_duty(heart1);
+            } else {
+                heart_mode = 1;
+            }
+
+
 
             heart1 = match heart1.checked_sub(1000) {
                 Some(n) => n,
@@ -215,7 +175,7 @@ fn main() -> ! {
                 None => 0,
             };
 
-            delay.delay_ms(pulse);
+            delay.delay_ms(10);
         }
     }
 }
